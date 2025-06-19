@@ -16,6 +16,7 @@ public class DuelManager {
     private static final Map<ServerPlayer, ServerPlayer> active = new HashMap<>();
     private static final Map<ServerPlayer, Double> oldMaxHealth = new HashMap<>();
     private static final Map<ServerPlayer, Integer> oldLives = new HashMap<>();
+    private static final Map<ServerPlayer, Boolean> hadLivesKey = new HashMap<>();
 
     public static void requestDuel(ServerPlayer requester, String targetName) {
         ServerPlayer target = requester.server.getPlayerList().getPlayerByName(targetName);
@@ -63,13 +64,14 @@ public class DuelManager {
     }
 
     private static void disableModHearts(ServerPlayer player) {
-        int currentLives = player.getPersistentData().getInt("MyLives");
+        var data = player.getPersistentData();
+        int currentLives = data.getInt("MyLives");
         if (!oldLives.containsKey(player)) {
             oldLives.put(player, currentLives);
+            hadLivesKey.put(player, data.contains("MyLives"));
         }
-        if (currentLives != 0) {
-            player.getPersistentData().putInt("MyLives", 0);
-            callSaveLives(player, 0);
+        if (data.contains("MyLives")) {
+            data.remove("MyLives");
         }
     }
 
@@ -94,9 +96,10 @@ public class DuelManager {
             }
         }
         Integer lives = oldLives.remove(player);
-        if (lives != null) {
-            player.getPersistentData().putInt("MyLives", lives);
-            callSaveLives(player, lives);
+        Boolean hadKey = hadLivesKey.remove(player);
+        if (hadKey != null && hadKey) {
+            player.getPersistentData().putInt("MyLives", lives == null ? 0 : lives);
+            callSaveLives(player, lives == null ? 0 : lives);
         }
     }
 
