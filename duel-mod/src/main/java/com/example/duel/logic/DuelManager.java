@@ -15,6 +15,7 @@ public class DuelManager {
     private static final Map<ServerPlayer, ServerPlayer> pending = new HashMap<>();
     private static final Map<ServerPlayer, ServerPlayer> active = new HashMap<>();
     private static final Map<ServerPlayer, Double> oldMaxHealth = new HashMap<>();
+    private static final Map<ServerPlayer, Integer> oldLives = new HashMap<>();
 
     public static void requestDuel(ServerPlayer requester, String targetName) {
         ServerPlayer target = requester.server.getPlayerList().getPlayerByName(targetName);
@@ -37,6 +38,8 @@ public class DuelManager {
         active.put(target, requester);
         disableExtraHearts(requester);
         disableExtraHearts(target);
+        disableModHearts(requester);
+        disableModHearts(target);
     }
 
     public static void denyDuel(ServerPlayer target) {
@@ -59,6 +62,17 @@ public class DuelManager {
         }
     }
 
+    private static void disableModHearts(ServerPlayer player) {
+        int currentLives = player.getPersistentData().getInt("MyLives");
+        if (!oldLives.containsKey(player)) {
+            oldLives.put(player, currentLives);
+        }
+        if (currentLives != 0) {
+            player.getPersistentData().putInt("MyLives", 0);
+            callSaveLives(player, 0);
+        }
+    }
+
     @SubscribeEvent
     public static void onDeath(LivingDeathEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
@@ -78,6 +92,20 @@ public class DuelManager {
             if (player.getHealth() > prev.floatValue()) {
                 player.setHealth(prev.floatValue());
             }
+        }
+        Integer lives = oldLives.remove(player);
+        if (lives != null) {
+            player.getPersistentData().putInt("MyLives", lives);
+            callSaveLives(player, lives);
+        }
+    }
+
+    private static void callSaveLives(ServerPlayer player, int lives) {
+        try {
+            Class<?> clazz = Class.forName("net.lxk4z.minecrafthelden.handler.ServerEventHandler");
+            java.lang.reflect.Method m = clazz.getMethod("saveMyLivesData", java.util.UUID.class, int.class);
+            m.invoke(null, player.getUUID(), lives);
+        } catch (Exception ignored) {
         }
     }
 }
