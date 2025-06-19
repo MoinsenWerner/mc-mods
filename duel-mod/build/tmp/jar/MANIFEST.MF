@@ -1,0 +1,9 @@
+Manifest-Version: 1.0
+Specification-Title: duellmod
+Specification-Vendor: PlsReload9383, Leonlanddc
+Specification-Version: 1
+Implementation-Title: duel-mod
+Implementation-Version: 1.0.0
+Implementation-Vendor: PlsReload9383, Leonlanddc
+Implementation-Timestamp: 2025-06-19T19:49:51+0200
+
