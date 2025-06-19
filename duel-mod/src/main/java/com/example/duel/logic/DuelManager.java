@@ -2,7 +2,7 @@ package com.example.duel.logic;
 
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.network.chat.Component;
-import net.minecraft.world.damagesource.DamageSource;
+import net.minecraft.world.entity.ai.attributes.Attributes;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -14,6 +14,8 @@ import java.util.Map;
 public class DuelManager {
     private static final Map<ServerPlayer, ServerPlayer> pending = new HashMap<>();
     private static final Map<ServerPlayer, ServerPlayer> active = new HashMap<>();
+    private static final Map<ServerPlayer, Double> oldMaxHealth = new HashMap<>();
+    private static final Map<ServerPlayer, Integer> oldLives = new HashMap<>();
 
     public static void requestDuel(ServerPlayer requester, String targetName) {
         ServerPlayer target = requester.server.getPlayerList().getPlayerByName(targetName);
@@ -22,7 +24,8 @@ public class DuelManager {
             return;
         }
         pending.put(target, requester);
-        target.sendSystemMessage(Component.literal(requester.getName().getString() + " möchte sich mit dir duellieren. /accept um anzunehmen, /deny um abzulehnen."));
+        target.sendSystemMessage(Component.literal(requester.getName().getString() +
+                " möchte sich mit dir duellieren. /accept um anzunehmen, /deny um abzulehnen."));
     }
 
     public static void acceptDuel(ServerPlayer target) {
@@ -33,7 +36,10 @@ public class DuelManager {
         }
         active.put(requester, target);
         active.put(target, requester);
-        // TODO disable extra hearts here
+        disableExtraHearts(requester);
+        disableExtraHearts(target);
+        disableModHearts(requester);
+        disableModHearts(target);
     }
 
     public static void denyDuel(ServerPlayer target) {
@@ -43,14 +49,64 @@ public class DuelManager {
         }
     }
 
+    private static void disableExtraHearts(ServerPlayer player) {
+        double currentMax = player.getAttribute(Attributes.MAX_HEALTH).getBaseValue();
+        if (!oldMaxHealth.containsKey(player)) {
+            oldMaxHealth.put(player, currentMax);
+        }
+        if (currentMax > 20.0D) {
+            player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(20.0D);
+        }
+        if (player.getHealth() > 20.0F) {
+            player.setHealth(20.0F);
+        }
+    }
+
+    private static void disableModHearts(ServerPlayer player) {
+        int currentLives = player.getPersistentData().getInt("MyLives");
+        if (!oldLives.containsKey(player)) {
+            oldLives.put(player, currentLives);
+        }
+        if (currentLives != 0) {
+            player.getPersistentData().putInt("MyLives", 0);
+            callSaveLives(player, 0);
+        }
+    }
+
     @SubscribeEvent
     public static void onDeath(LivingDeathEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
         ServerPlayer opponent = active.remove(player);
         if (opponent != null) {
             active.remove(opponent);
-            // TODO reset hearts here
+            resetHearts(player);
+            resetHearts(opponent);
             opponent.sendSystemMessage(Component.literal("Duell beendet."));
         }
     }
+
+    private static void resetHearts(ServerPlayer player) {
+        Double prev = oldMaxHealth.remove(player);
+        if (prev != null) {
+            player.getAttribute(Attributes.MAX_HEALTH).setBaseValue(prev);
+            if (player.getHealth() > prev.floatValue()) {
+                player.setHealth(prev.floatValue());
+            }
+        }
+        Integer lives = oldLives.remove(player);
+        if (lives != null) {
+            player.getPersistentData().putInt("MyLives", lives);
+            callSaveLives(player, lives);
+        }
+    }
+
+    private static void callSaveLives(ServerPlayer player, int lives) {
+        try {
+            Class<?> clazz = Class.forName("net.lxk4z.minecrafthelden.handler.ServerEventHandler");
+            java.lang.reflect.Method m = clazz.getMethod("saveMyLivesData", java.util.UUID.class, int.class);
+            m.invoke(null, player.getUUID(), lives);
+        } catch (Exception ignored) {
+        }
+    }
 }
+
